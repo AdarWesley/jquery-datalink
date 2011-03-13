@@ -21,9 +21,6 @@
 				converter = $.converters[converter];
 			}
 
-			var convert = converter.convert,
-				convertBack = converter.convertBack;
-
 			if (converter.convert && typeof converter.convert === "string") {
 				converter.convert = $.convertFn[converter.convert];
 			}
@@ -43,10 +40,43 @@
 		return "{{link(" + (tmplItem._links.length - 1) + ")}}";
 	};
 
+	$.tmpl.regPluginInTmplItem = function (tmplItem, data, pluginName, pluginSettings, context) {
+
+		tmplItem._plugins = tmplItem._plugins || [];
+		tmplItem._plugins.push(function (tmplItem, elem) {
+			$.tmpl.instatiatePlugin(tmplItem, elem, data, pluginName, pluginSettings, context);
+		});
+
+		return ' jquery:plugin="' + (tmplItem._plugins.length - 1) + '" ';
+	};
+
+	$.tmpl.instatiatePlugin = function (tmplItem, elem, data, pluginName, pluginSettings, context) {
+		var wrapped = $(elem);
+		if (!wrapped[pluginName])
+			return;
+
+		if (typeof pluginSettings === "string") {
+			pluginSettings = $.parseJSON(pluginSettings);
+		}
+
+		wrapped[pluginName].apply(wrapped, pluginSettings);
+	};
+
 	// Called after template execution on the source item, enabling element binding
 	function rendered(tmplItem) {
 		for (var elem in tmplItem.nodes) {
 			bind(tmplItem, tmplItem.nodes[elem]);
+			instatiatePlugins(tmplItem, tmplItem.nodes[elem]);
+		}
+	}
+
+	function instatiatePlugins(tmplItem, elem) {
+		for (var i = 0; i < elem.attributes.length; i++) {
+			var attr = elem.attributes[i];
+			if (attr && attr.name == "jquery:plugin") {
+				var pluginCreator = tmplItem._plugins[parseInt(attr.nodeValue, 10)];
+				pluginCreator && pluginCreator(tmplItem, elem);
+			}
 		}
 	}
 
@@ -65,10 +95,9 @@
 				elem.innerHTML = binding.value;
 				var mapping = {};
 				mapping[binding.field] = {
-
-					convert: function (value, source, target) {
-						if (binding.converter && binding.converter.convert) {
-							value = binding.converter.convert(value, source, target)
+					convertBack: function (value, source, target) {
+						if (binding.converter && binding.converter.convertBack) {
+							value = binding.converter.convertBack(value, source, target)
 							if (value === undefined)
 								return;
 						}
@@ -97,7 +126,6 @@
 
 	// Binds element attributes that are linked to javascript attributes
 	function bindAttr(tmplItem, elem, attr) {
-
 		var binding = getBinding(tmplItem, elem, attr.nodeValue);
 		if (binding) {
 
@@ -138,7 +166,7 @@
 					else if (attrName == "value") {
 
 						// Get the value of the current context
-						var context = convert(binding.context, binding.converter);
+						var context = convertBack(binding.context, binding.converter);
 
 						// Set the value of the element
 						elem.value = context;
@@ -169,7 +197,7 @@
 								if (field == binding.field) {
 
 									// Get the current selected value of the field
-									var selectedValue = convert(value, binding.converter, binding.data, elem);
+									var selectedValue = convertBack(value, binding.converter, binding.data, elem);
 
 									// Set the checked status of the element based on whether it is the selected value
 									elem.checked = elem.value == selectedValue;
@@ -238,7 +266,7 @@
 					}
 
 					// Create the link mapping
-					mapping[binding.field] = $.extend({ name: elem.name }, { convert: binding.converter.convertBack, convertBack: binding.converter.convert });
+					mapping[binding.field] = $.extend({ name: elem.name }, { convert: binding.converter.convert, convertBack: binding.converter.convertBack });
 				}
 			}
 
@@ -253,9 +281,9 @@
 				// Create the link mapping
 				mapping[binding.field] = {
 
-					convert: function (value, source, target) {
-						if (binding.converter && binding.converter.convert) {
-							value = binding.converter.convert(value, source, target)
+					convertBack: function (value, source, target) {
+						if (binding.converter && binding.converter.convertBack) {
+							value = binding.converter.convertBack(value, source, target)
 							if (value === undefined)
 								return;
 						}
@@ -279,7 +307,7 @@
 				binding = tmplItem._links[index];
 
 			// Get the value of the linked field
-			binding.value = convert(binding.data[binding.field], binding.converter, binding.data, elem);
+			binding.value = convertBack(binding.data[binding.field], binding.converter, binding.data, elem);
 
 			return binding;
 		}
@@ -287,24 +315,24 @@
 	}
 
 	// Convert the specified value
-	function convert(value, converter, data, elem) {
+	function convertBack(value, converter, data, elem) {
 
 		// Get the convert function to use
-		var convert = converter ? converter.convert : null,
+		var convertBack = converter ? converter.convertBack : null,
 			result;
 
 		// Array
 		if ($.isArray(value)) {
 			result = [];
 			for (var i = 0; i < value.length; i++) {
-				result[i] = convert ? convert(value[i], data, elem) : value[i];
+				result[i] = convertBack ? convertBack(value[i], data, elem) : value[i];
 				result[i] = result[i] === undefined ? value[i] + "" : result[i] + "";
 			}
 		}
 
 		// Single Value
 		else {
-			result = convert ? convert(value, data, elem) : value;
+			result = convertBack ? convertBack(value, data, elem) : value;
 			result = result === undefined ? value + "" : result + "";
 		}
 
@@ -394,6 +422,10 @@
 		"link": {
 			_default: { $1: "$data", $2: "null" },
 			open: "_.push($.tmpl.linkAttr($item,$data,'$1',$2,this));"
+		},
+		"plugin": {
+			_default: { $2: "null" },
+			open: "_.push($.tmpl.regPluginInTmplItem($item,$data,'$1',$2,this));"
 		}
 	});
 

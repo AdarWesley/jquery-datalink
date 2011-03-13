@@ -1,0 +1,66 @@
+﻿<!DOCTYPE html> 
+<html xmlns="http://www.w3.org/1999/xhtml"> 
+<head>
+	<title>My Plugin instantiation - Linking Demo</title>
+	<link type="text/css" rel="Stylesheet" href="demo-contacts.css" />
+	<script type="text/javascript" src="../jquery.js"></script>
+	<script type="text/javascript" src="../jquery.tmpl.js"></script>
+	<script type="text/javascript" src="../jquery.tmplPlus.js"></script>
+	<script type="text/javascript" src="../jquery.datalink.js"></script>
+	<script type="text/javascript" src="../jquery.tmpl.datalink.js"></script>
+	<script type="text/javascript" src="../jquery.glob.js"></script>
+	<script type="text/javascript" src="../jquery.maskedinput-1.2.2.js"></script>
+
+	<script id="phone" type="text/x-jquery-tmpl">
+		Phone number: <input class="phone phone-number" name="number" type="text" {{plugin(["999 999-9999", { placeholder: '-'}]) mask}} value="{{link('phone') number}}" />
+	</script>
+	<script id="phone2" type="text/x-jquery-tmpl">
+		Other linked phone: <input class="phone phone-number" name="number" type="text" {{plugin(["9999999999"]) mask}} value="{{link number}}" /><br />
+		Changing one input box should update the other
+	</script>
+
+	<script type="text/javascript">
+		var phone = {
+			number: 9185551234
+		};
+
+		$(function () {
+			$.extend($.convertFn, {
+				// linking converter that normalizes phone numbers
+				phone: function (value) {// turn a string phone number into a normalized one with dashes
+					// and parens
+					value += "";
+					value = (parseInt(value.replace(/[\(\)\- ]/g, ""), 10) || 0).toString();
+					value = "0000000000" + value;
+					value = value.substr(value.length - 10);
+					value = "(" + value.substr(0, 3) + ") " + value.substr(3, 3) + "-" + value.substr(6);
+					return value;
+				}
+			});
+
+			// Converters
+			$.extend($.converters, {
+				// linking converter that normalizes phone numbers
+				phone: { convert: 'phone', convertBack: 'phone' }
+			});
+
+			$("#phone").tmpl(phone).appendTo("#placeHolder");
+			$("#phone2").tmpl(phone).appendTo("#placeHolder2");
+
+			$("#setNumber").click(function () {
+				$(phone).data("number", 2136663210);
+			});
+		});
+	</script>
+</head>
+
+<body>
+<div id="placeHolder">
+</div>
+<div id="placeHolder2">
+</div>
+<div>
+	<input type="button" id="setNumber" value="Set Number" />
+</div>
+</body>
+</html>
